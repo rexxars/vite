@@ -823,14 +823,20 @@ export function resolveHtmlTransforms(
 
   for (const plugin of plugins) {
     const hook = plugin.transformIndexHtml
-    if (hook) {
-      if (typeof hook === 'function') {
-        normalHooks.push(hook)
-      } else if ((hook.order || hook.enforce) === 'pre') {
-        preHooks.push(hook.handler || hook.transform)
-      } else if ((hook.order || hook.enforce) === 'post') {
-        postHooks.push(hook.handler || hook.transform)
-      } else normalHooks.push(hook.handler || hook.transform)
+    if (!hook) continue
+
+    if (typeof hook === 'function') {
+      normalHooks.push(hook)
+    } else {
+      const order = hook.order || hook.enforce
+      const handler = hook.handler || hook.transform
+      if (order === 'pre') {
+        preHooks.push(handler)
+      } else if (order === 'post') {
+        postHooks.push(handler)
+      } else {
+        normalHooks.push(handler)
+      }
     }
   }
 
