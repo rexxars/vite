@@ -224,7 +224,9 @@ function handleParseError(
  * Compiles index.html into an entry js module
  */
 export function buildHtmlPlugin(config: ResolvedConfig): Plugin {
-  const [preHooks, postHooks] = resolveHtmlTransforms(config.plugins)
+  const [preHooks, normalHooks, postHooks] = resolveHtmlTransforms(
+    config.plugins
+  )
   const processedHtml = new Map<string, string>()
   const isExcludedUrl = (url: string) =>
     url.startsWith('#') ||
@@ -714,12 +716,16 @@ export function buildHtmlPlugin(config: ResolvedConfig): Plugin {
         if (s) {
           result = s.toString()
         }
-        result = await applyHtmlTransforms(result, postHooks, {
-          path: '/' + relativeUrlPath,
-          filename: id,
-          bundle,
-          chunk
-        })
+        result = await applyHtmlTransforms(
+          result,
+          [...normalHooks, ...postHooks],
+          {
+            path: '/' + relativeUrlPath,
+            filename: id,
+            bundle,
+            chunk
+          }
+        )
         // resolve asset url references
         result = result.replace(assetUrlRE, (_, fileHash, postfix = '') => {
           return (
@@ -792,30 +798,43 @@ export type IndexHtmlTransformHook = (
 export type IndexHtmlTransform =
   | IndexHtmlTransformHook
   | {
+      order?: 'pre' | 'post' | null
+      handler: IndexHtmlTransformHook
+      /**
+       * @deprecated renamed to `order`
+       */
       enforce?: 'pre' | 'post'
-      transform: IndexHtmlTransformHook
+      /**
+       * @deprecated renamed to `handler`
+       */
+      transform?: IndexHtmlTransformHook
     }
 
 export function resolveHtmlTransforms(
   plugins: readonly Plugin[]
-): [IndexHtmlTransformHook[], IndexHtmlTransformHook[]] {
+): [
+  IndexHtmlTransformHook[],
+  IndexHtmlTransformHook[],
+  IndexHtmlTransformHook[]
+] {
   const preHooks: IndexHtmlTransformHook[] = []
+  const normalHooks: IndexHtmlTransformHook[] = []
   const postHooks: IndexHtmlTransformHook[] = []
 
   for (const plugin of plugins) {
     const hook = plugin.transformIndexHtml
     if (hook) {
       if (typeof hook === 'function') {
-        postHooks.push(hook)
-      } else if (hook.enforce === 'pre') {
-        preHooks.push(hook.transform)
-      } else {
-        postHooks.push(hook.transform)
-      }
+        normalHooks.push(hook)
+      } else if ((hook.order || hook.enforce) === 'pre') {
+        preHooks.push(hook.handler || hook.transform)
+      } else if ((hook.order || hook.enforce) === 'post') {
+        postHooks.push(hook.handler || hook.transform)
+      } else normalHooks.push(hook.handler || hook.transform)
     }
   }
 
-  return [preHooks, postHooks]
+  return [preHooks, normalHooks, postHooks]
 }
 
 export async function applyHtmlTransforms(
