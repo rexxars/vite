@@ -828,8 +828,8 @@ export function resolveHtmlTransforms(
     if (typeof hook === 'function') {
       normalHooks.push(hook)
     } else {
-      const order = hook.order || hook.enforce
-      const handler = hook.handler || hook.transform
+      const order = hook.order ?? hook.enforce
+      const handler = hook.handler ?? hook.transform
       if (order === 'pre') {
         preHooks.push(handler)
       } else if (order === 'post') {
