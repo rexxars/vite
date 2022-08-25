@@ -17,14 +17,41 @@ const runtimeFilePath = path.join(
 export const runtimeCode = `
 const exports = {}
 ${fs.readFileSync(runtimeFilePath, 'utf-8')}
-function debounce(fn, delay) {
+
+// Keep copy of original, non-debounced refresher
+const performReactRefresh = exports.performReactRefresh
+
+// Debounce refreshes for 16ms and return a promise that resolved when refreshed
+exports.performReactRefresh = (() => {
   let handle
-  return () => {
+  let promise
+  let callback
+  return function scheduleReactRefresh(cb) {
+    // Debounce by clearing any previously scheduled refresh
     clearTimeout(handle)
-    handle = setTimeout(fn, delay)
+
+    // Create a promise we can resolve when the refresh is eventually performed
+    if (!promise) {
+      promise = new Promise((resolve) => {
+        callback = resolve
+      })
+    }
+
+    // Schedule a refresh to happen in 16ms (unless called again before then)
+    timer = setTimeout(() => {
+      performReactRefresh()
+
+      // Resolve the promise
+      callback()
+
+      // Reset the promise so the next invocation will create a new one
+      promise = undefined
+    }, 16)
+
+    // Return the promise so we can
+    return promise
   }
-}
-exports.performReactRefresh = debounce(exports.performReactRefresh, 16)
+})()
 export default exports
 `
 
@@ -66,8 +93,9 @@ if (import.meta.hot) {
   __ACCEPT__
   if (!window.__vite_plugin_react_timeout) {
     window.__vite_plugin_react_timeout = setTimeout(() => {
-      window.__vite_plugin_react_timeout = 0;
-      RefreshRuntime.performReactRefresh();
+      RefreshRuntime.performReactRefresh().then(() => {
+        window.__vite_plugin_react_timeout = 0;
+      });
     }, 30);
   }
 }`
